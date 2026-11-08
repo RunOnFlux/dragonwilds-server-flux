@@ -195,7 +195,7 @@ run_generation() {
 }
 
 flux_log "dragonwilds-server-flux ${FLUX_IMAGE_VERSION:-dev}"
-cat /branding 2>/dev/null
+flux_banner "RuneScape: Dragonwilds"
 prepare_user
 
 while true; do

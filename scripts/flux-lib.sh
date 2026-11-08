@@ -13,6 +13,16 @@ flux_log() {
   printf '%s [flux] %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*"
 }
 
+# The start-up banner, through the normal log path (docker logs, the panel's log). ASCII only.
+# Replaces the upstream image's own banner, which advertised another host. $1 = the game's name.
+flux_banner() {
+  local rule='====================================================================='
+  printf '%s\n' "${rule}"
+  printf ' %s server image by FluxCloud - https://runonflux.com\n' "$1"
+  printf ' Host this and 30+ other games in one click: https://runonflux.com/games\n'
+  printf '%s\n' "${rule}"
+}
+
 # "true"/"1"/"yes" (any case) is on, everything else off. $1 = value, $2 = default when empty.
 flux_is_on() {
   local v="${1:-$2}"

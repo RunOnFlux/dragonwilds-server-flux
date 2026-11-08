@@ -61,5 +61,10 @@ check "flux_is_on true" 0 "$(status flux_is_on TRUE)"
 check "flux_is_on false" 1 "$(status flux_is_on false)"
 check "flux_is_on default" 0 "$(status flux_is_on '' true)"
 
+banner="$(flux_banner "RuneScape: Dragonwilds")"
+check "banner names FluxCloud" 0 "$(echo "${banner}" | grep -q 'runonflux.com' ; echo $?)"
+check "banner does not advertise another host" 1 "$(echo "${banner}" | grep -qi 'indifferent' ; echo $?)"
+check "banner is plain ASCII" 1 "$(echo "${banner}" | grep -qP '[^\x00-\x7F]' ; echo $?)"
+
 printf '%s passed, %s failed\n' "${pass}" "${fail}"
 [ "${fail}" -eq 0 ]

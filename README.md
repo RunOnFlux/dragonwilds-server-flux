@@ -7,6 +7,14 @@ It is a thin layer on the community image the marketplace has always deployed
 (`indifferentbroccoli/runescape-dragonwilds-server-docker`), pinned **by digest**, with its own
 PID 1 that supervises the game instead of becoming it.
 
+## Credit and licence
+
+The game launcher inside this image (installing with DepotDownloader, writing `DedicatedServer.ini`,
+the healthcheck) is the work of [indifferentbroccoli](https://github.com/indifferentbroccoli/runescape-dragonwilds-server-docker),
+published under the GNU GPL v3. This repository adds the supervisor, and the image start-up banner
+and image labels are ours, so logs and `docker inspect` name this image and not the launcher's
+author. The attribution stays here, in the README.
+
 ## Why a layer and not a rewrite
 
 The upstream image is maintained, installs the game with DepotDownloader and already fixes the
@@ -66,6 +74,7 @@ Taken on a live server, 2026-11-08, build manifest 1991230221118269239.
 
 ## Versions
 
+- 1.0.1: start-up banner and image labels name FluxCloud instead of the launcher author; credit moved to the README.
 - 1.0.0: first version.
 
 ## Tests
