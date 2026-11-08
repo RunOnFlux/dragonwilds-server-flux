@@ -13,7 +13,8 @@ The game launcher inside this image (installing with DepotDownloader, writing `D
 the healthcheck) is the work of [indifferentbroccoli](https://github.com/indifferentbroccoli/runescape-dragonwilds-server-docker),
 published under the GNU GPL v3. This repository adds the supervisor, and the image start-up banner
 and image labels are ours, so logs and `docker inspect` name this image and not the launcher's
-author. The attribution stays here, in the README.
+author. The attribution stays here, in the README. The repository is licensed under the GNU GPL v3 (see
+`LICENSE`), the same licence as the launcher it builds on.
 
 ## Why a layer and not a rewrite
 
