@@ -1,0 +1,94 @@
+name: Test, build and publish
+
+# The game is not in the image (DepotDownloader installs it on first start), so CI cannot boot the
+# game: tests/test-image.sh needs a volume that already holds it and is run by hand before a
+# release. CI runs the unit tests and a boot smoke that needs no game. A push to main publishes.
+# Publishing :latest DOES reach running servers: FluxOS checks every app's tag every six hours and
+# soft-redeploys onto a new digest. There is no scheduled rebuild on purpose: the base image is
+# pinned by digest in the Dockerfile, and a rebuild of unchanged inputs would still restart servers.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: runonflux/dragonwilds-server-flux
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Syntax
+        run: for f in scripts/*.sh tests/*.sh; do bash -n "$f"; done
+
+      - name: Unit tests
+        run: ./tests/test-flux.sh
+
+      - name: Version is a version
+        run: grep -Eqx '[0-9]+\.[0-9]+\.[0-9]+' VERSION
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Version
+        run: echo "VERSION=$(tr -d '[:space:]' <VERSION)" >>"$GITHUB_ENV"
+
+      # Built and loaded first, smoke-tested, and then THAT image is pushed.
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          build-args: |
+            FLUX_IMAGE_VERSION=${{ env.VERSION }}
+          tags: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # No game, no volume: the entrypoint must print its version and banner, and refuse to start
+      # without an OWNER_ID with a message (exit 1).
+      - name: Boot smoke
+        run: |
+          set -u
+          out="$(docker run --rm -e PUID=1000 -e PGID=1000 -e UPDATE_ON_START=false "${IMAGE_NAME}:${{ github.sha }}" 2>&1 || true)"
+          printf '%s\n' "${out}"
+          grep -q "dragonwilds-server-flux ${VERSION}" <<<"${out}"
+          grep -q "image by FluxCloud" <<<"${out}"
+          grep -q "OWNER_ID is not set" <<<"${out}"
+
+      - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # A version tag is written once: a later run on the same VERSION moves :latest and adds its
+      # commit tag, never rewrites :<VERSION>, so a server pinned to a version keeps that image.
+      - name: Push the tested image
+        if: github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          tested="${IMAGE_NAME}:${{ github.sha }}"
+          tags=(latest "${{ github.sha }}")
+          if docker manifest inspect "${IMAGE_NAME}:${VERSION}" >/dev/null 2>&1; then
+            echo "::warning::${IMAGE_NAME}:${VERSION} already exists and is not rewritten; bump VERSION to publish a new version tag"
+          else
+            tags+=("${VERSION}")
+          fi
+          for tag in "${tags[@]}"; do
+            docker tag "${tested}" "${IMAGE_NAME}:${tag}"
+            docker push "${IMAGE_NAME}:${tag}"
+          done
