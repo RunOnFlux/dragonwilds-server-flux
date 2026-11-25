@@ -15,12 +15,13 @@ bad() { fail=$((fail + 1)); echo "FAIL $1"; }
 run() { # extra docker args...
   docker rm -f dwt-case >/dev/null 2>&1
   rm -rf "${work}/v"; cp -r "${DW_VOLUME}" "${work}/v"
+  ${PRE:-:}
   docker run -d --name dwt-case -e PUID="$(id -u)" -e PGID="$(id -g)" -e UPDATE_ON_START=false \
     -e DEFAULT_PORT=27777 -e OWNER_ID=owner1 -e ADMIN_PASSWORD=adm -e FLUX_TICK=2 \
     -v "${work}/v:/home/steam/server-files" "$@" "${IMG}" >/dev/null
 }
 waitlog() { # pattern, seconds
-  local i; for ((i = 0; i < $2; i++)); do docker logs dwt-case 2>&1 | grep -aq "$1" && return 0; sleep 1; done; return 1
+  local i; for ((i = 0; i < $2; i++)); do docker logs ${SINCE:+--since "${SINCE}"} dwt-case 2>&1 | grep -a "$1" >/dev/null && return 0; sleep 1; done; return 1
 }
 
 # 1. Values with an apostrophe and spaces reach the ini and the world registers.
@@ -43,6 +44,27 @@ docker rm -f dwt-case >/dev/null 2>&1
 rm -rf "${work}/v"; cp -r "${DW_VOLUME}" "${work}/v"
 docker run -d --name dwt-case -e PUID="$(id -u)" -e PGID="$(id -g)" -e UPDATE_ON_START=false -v "${work}/v:/home/steam/server-files" "${IMG}" >/dev/null
 waitlog "OWNER_ID is not set" 30 && ok "missing OWNER_ID is explained" || bad "missing OWNER_ID"
+
+# 5. Bans and admin rights the game keeps in the ini survive the rewrite at every start, through
+# the game's own shutdown and two more restarts. Managed keys still follow the environment.
+INI="${work}/v/RSDragonwilds/Saved/Config/LinuxServer/DedicatedServer.ini"
+BAN='KnownPlayerList=(UserId=00000000000000000000000000000bad,UserName="Banned One",Privileges=(PrivilegeMask=0),bIsBanned=True)'
+ADM='KnownPlayerList=(UserId=00026fcb85de45f6b071800b4985f1e5,UserName="Stew-bey",Privileges=(PrivilegeMask=14),bIsBanned=False)'
+seed() { mkdir -p "$(dirname "${INI}")"; printf '[/Script/Dominion.DedicatedServerSettings]\nServerName=OLD NAME\n%s\n%s\n' "${ADM}" "${BAN}" >"${INI}"; }
+PRE=seed run -e SERVER_NAME="New Name" -e DEFAULT_WORLD_NAME=KeepW
+waitlog "START SESSION - Success" 120 && ok "server with a seeded ban list registers" || bad "seeded server did not register"
+grep -qxF "${BAN}" "${INI}" && grep -qxF "${ADM}" "${INI}" && ok "ban and admin lines present while running" || bad "lines lost at start"
+grep -q '^ServerName=New Name$' "${INI}" && ! grep -q 'OLD NAME' "${INI}" && ok "managed keys still follow the environment" || bad "managed key stale"
+waitlog "Kept .* game-managed setting line" 5 && ok "start-up log says what was kept" || bad "no keep message"
+docker stop -t 10 dwt-case >/dev/null
+grep -qxF "${BAN}" "${INI}" && ok "ban survives the game's own shutdown" || bad "game shutdown dropped the ban"
+for n in 1 2; do
+  SINCE="$(date -u +%Y-%m-%dT%H:%M:%S)"; sleep 1; docker start dwt-case >/dev/null; waitlog "START SESSION - Success" 120 || bad "restart ${n} did not register"
+  waitlog "Kept .* game-managed setting line" 5 || bad "restart ${n}: no keep message"
+  docker stop -t 10 dwt-case >/dev/null; SINCE=""
+  grep -qxF "${BAN}" "${INI}" && grep -qxF "${ADM}" "${INI}" && ok "lines survive restart ${n}" || bad "lines lost on restart ${n}"
+done
+[ "$(grep -cxF "${BAN}" "${INI}")" = 1 ] && ok "no duplicates after restarts" || bad "ban line duplicated"
 
 printf '%s passed, %s failed\n' "${pass}" "${fail}"
 [ "${fail}" -eq 0 ]

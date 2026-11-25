@@ -57,6 +57,10 @@ write_config() {
   # Keep the GUID across restarts and when the platform folder changes.
   SERVER_GUID=$(sed -n 's/^ServerGuid=\([0-9A-Fa-f]\+\).*/\1/p' "${file}" "${root}/${OTHER_SERVER_PLATFORM}/DedicatedServer.ini" 2>/dev/null | head -n1)
   export SERVER_GUID
+  # The game keeps bans and admin rights in this same file (KnownPlayerList). Read
+  # them BEFORE the file is rewritten, or every start wipes them.
+  local kept
+  kept="$(flux_ini_game_lines "${file}")" # this platform's file only: an unban must not come back from the other one
   flux_log "Writing DedicatedServer.ini"
   envsubst >"${file}" <<'TEMPLATE'
 [SectionsToSave]
@@ -71,6 +75,10 @@ DefaultWorldName=${DEFAULT_WORLD_NAME}
 PlatformPolicy=${PLATFORM_POLICY}
 ServerGuid=${SERVER_GUID}
 TEMPLATE
+  if [ -n "${kept}" ]; then
+    printf '%s\n' "${kept}" >>"${file}"
+    flux_log "Kept $(printf '%s\n' "${kept}" | wc -l) game-managed setting line(s) (players, bans) from the previous ini"
+  fi
   chown -R steam:steam "${FLUX_SERVER_FILES}"
 }
 

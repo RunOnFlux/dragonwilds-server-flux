@@ -66,5 +66,47 @@ check "banner names FluxCloud" 0 "$(echo "${banner}" | grep -q 'runonflux.com' ;
 check "banner does not advertise another host" 1 "$(echo "${banner}" | grep -qi 'indifferent' ; echo $?)"
 check "banner is plain ASCII" 1 "$(echo "${banner}" | grep -qP '[^\x00-\x7F]' ; echo $?)"
 
+# flux_ini_game_lines: what the game stored in the settings section survives a rewrite.
+ini="${tmp}/a.ini"
+cat >"${ini}" <<'INI'
+;METADATA=(Diff=true, UseCommands=true)
+[SectionsToSave]
+bCanSaveAllSections=true
+KnownPlayerList=(UserId=ignored,Section=wrong)
+
+[/Script/Dominion.DedicatedServerSettings]
+PlatformPolicy=Crossplay
+OwnerId=0002be
+WorldPassword=pw
+ServerName=x
+DefaultWorldName=w
+ServerGuid=ABCDEF
+AdminPassword=adm
+bAllowSendingCrashDumps=True
+KnownPlayerList=(UserId=0001,UserName="Stew-bey",Privileges=(PrivilegeMask=14),bIsBanned=False)
+KnownPlayerList=(UserId=0002,UserName="Bad, Guy=1",Privileges=(PrivilegeMask=0),bIsBanned=True)
+KnownPlayerList=(UserId=0002,UserName="Bad, Guy=1",Privileges=(PrivilegeMask=0),bIsBanned=True)
+;KnownPlayerList=(commented)
+AnythingByHand=1
+ownerid =evil
++OwnerId=evil
+
+[/Script/Other.Section]
+KnownPlayerList=(UserId=other)
+INI
+got="$(flux_ini_game_lines "${ini}")"
+check "keeps every player line, in order, once" 'bAllowSendingCrashDumps=True
+KnownPlayerList=(UserId=0001,UserName="Stew-bey",Privileges=(PrivilegeMask=14),bIsBanned=False)
+KnownPlayerList=(UserId=0002,UserName="Bad, Guy=1",Privileges=(PrivilegeMask=0),bIsBanned=True)
+AnythingByHand=1' "${got}"
+check "never returns a managed key" 1 "$(echo "${got}" | grep -qE '^(AdminPassword|OwnerId|WorldPassword|ServerName|DefaultWorldName|PlatformPolicy|ServerGuid)=' ; echo $?)"
+check "ignores other sections and comments" 1 "$(echo "${got}" | grep -qE 'other|wrong|commented' ; echo $?)"
+check "missing file is silent and empty" "" "$(flux_ini_game_lines "${tmp}/nope.ini")"
+check "missing file exits 0" 0 "$(status flux_ini_game_lines "${tmp}/nope.ini")"
+printf '[/Script/Dominion.DedicatedServerSettings]\r\nKnownPlayerList=(UserId=crlf)\r\n' >"${tmp}/crlf.ini"
+check "CRLF files lose the CR" "KnownPlayerList=(UserId=crlf)" "$(flux_ini_game_lines "${tmp}/crlf.ini")"
+check "file with only managed keys gives nothing" "" "$(printf '[/Script/Dominion.DedicatedServerSettings]\nOwnerId=1\n' >"${tmp}/m.ini"; flux_ini_game_lines "${tmp}/m.ini")"
+
+check "header with trailing space still matches" "KnownPlayerList=(UserId=sp)" "$(printf '[/Script/Dominion.DedicatedServerSettings] \nKnownPlayerList=(UserId=sp)\n' >"${tmp}/sp.ini"; flux_ini_game_lines "${tmp}/sp.ini")"
 printf '%s passed, %s failed\n' "${pass}" "${fail}"
 [ "${fail}" -eq 0 ]

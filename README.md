@@ -76,6 +76,7 @@ Taken on a live server, 2026-11-08, build manifest 1991230221118269239.
 ## Versions
 
 - 1.0.1: start-up banner and image labels name FluxCloud instead of the launcher author; credit moved to the README.
+- 1.0.2: bans and admin rights survive a restart. The ini is still rebuilt from the environment at every start, but the lines the game keeps in its settings section (`KnownPlayerList`, which holds who is admin and who is banned, plus anything added by hand) are read first and written back. Upstream drops them.
 - 1.0.0: first version.
 
 ## Tests

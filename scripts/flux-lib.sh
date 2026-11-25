@@ -105,3 +105,31 @@ flux_restart_budget_ok() {
   done
   [ "$n" -lt "$max" ]
 }
+
+# The keys the image writes itself from its environment. Everything else in the settings section
+# belongs to the game or to the owner: KnownPlayerList (who is admin, who is banned), the crash-dump
+# flag, and any line added by hand through the file manager.
+FLUX_INI_SECTION='[/Script/Dominion.DedicatedServerSettings]'
+FLUX_INI_MANAGED='adminpassword ownerid worldpassword servername defaultworldname platformpolicy serverguid'
+
+# Prints the lines of the settings section that the image does NOT manage, so a rewrite of the file
+# does not throw away what the game stored there (bans, admin rights). Reads every file given, in
+# order, and drops exact duplicates. Missing files are skipped. Pure: no writes.
+# Managed keys are matched without case, spaces or a leading +/-/./! (Unreal's ini operators), so a
+# hand-edited "ownerid =x" cannot sneak past the environment value.
+# $@ = ini files, the one in use first.
+flux_ini_game_lines() {
+  local f
+  for f in "$@"; do
+    [ -r "${f}" ] || continue
+    cat "${f}" 2>/dev/null
+  done | tr -d '\r' | awk -v section="${FLUX_INI_SECTION}" -v managed="${FLUX_INI_MANAGED}" '
+    BEGIN { n = split(managed, m, " "); for (i = 1; i <= n; i++) skip[m[i]] = 1 }
+    { line = $0; sub(/[ \t]+$/, "", line) }
+    line ~ /^\[.*\]$/ { inside = (line == section); next }
+    inside && line ~ /^[^;#=][^=]*=/ {
+      key = substr(line, 1, index(line, "=") - 1)
+      gsub(/[ \t]/, "", key); sub(/^[-+.!]+/, "", key); key = tolower(key)
+      if (!(key in skip) && !($0 in seen)) { seen[$0] = 1; print $0 }
+    }'
+}

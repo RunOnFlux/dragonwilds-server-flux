@@ -7,7 +7,7 @@
 # 2026-10-08 (the build that fixed quoting, the SIGTERM pid bug and keeps the ServerGuid).
 FROM indifferentbroccoli/runescape-dragonwilds-server-docker@sha256:ecacc3168a3bd7d723e957eab09df14757882ed2113cf1bc3c57bc4e1cdf9252
 
-ARG FLUX_IMAGE_VERSION=1.0.1
+ARG FLUX_IMAGE_VERSION=1.0.2
 LABEL org.opencontainers.image.title="dragonwilds-server-flux" \
       org.opencontainers.image.version="${FLUX_IMAGE_VERSION}" \
       org.opencontainers.image.description="RuneScape: Dragonwilds dedicated server for Flux, with in-place restarts, a watchdog and a patch watcher" \
